@@ -29,7 +29,6 @@ class VMController:  # Don't change class name and method names.
         """
         Create a new virtual machine
         """
-
         try:
             vm_id = "vm-" + str(uuid.uuid4())[:8]
             created_at = time.time()
