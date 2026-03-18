@@ -70,7 +70,8 @@ def create_instance():
             'status': 'running',
             'user': data['user'],
             'created_at': result['created_at'],
-            'start_time': result['created_at']
+            'start_time': result['created_at'],
+            'ssh_port': result.get('port') or result.get('ssh_port')  #Add ssh_port
         }
         db['instances'].append(instance)
         save_data(db)
