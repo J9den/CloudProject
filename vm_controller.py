@@ -3,38 +3,51 @@ import os
 import uuid
 import time
 import signal
+import socket
 
-
-class VMController:  # Don't change class name and method names.
+class VMController:
 
     def __init__(self):
-        """
-        Initialize the VM controller
-        Task: Create directory for VM files (./vms)
-        """
         os.makedirs("./vms", exist_ok=True)
-
-        # Local runtime storage of VM configs
         self.vms = {}
 
     def _parse_memory(self, memory):
         """Convert memory string to MB"""
-        if memory.endswith("GB"):
-            return int(memory[:-2]) * 1024
-        if memory.endswith("MB"):
-            return int(memory[:-2])
+        if isinstance(memory, str):
+            if memory.endswith("GB"):
+                return int(memory[:-2]) * 1024
+            if memory.endswith("MB"):
+                return int(memory[:-2])
         return int(memory)
+    
+    def _is_port_free(self, port):
+        """Check if port is available"""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(("localhost", port)) != 0
+    
+    def _find_port(self, start=10000, end=15000):
+        """Find first free port in range"""
+        for port in range(start, end):
+            if self._is_port_free(port):
+                return port
+        return None
 
     def create(self, name, os_type, cpu, memory, user):
-        """
-        Create a new virtual machine
-        """
         try:
+            # Basic validation
+            if not isinstance(name, str) or not name:
+                return {'success': False, 'error': 'Invalid name'}
+            
+            if not isinstance(cpu, int) or cpu <= 0:
+                return {'success': False, 'error': 'Invalid CPU'}
+            
+            if not isinstance(user, str) or not user:
+                return {'success': False, 'error': 'Invalid user'}
+
             vm_id = "vm-" + str(uuid.uuid4())[:8]
             created_at = time.time()
 
             memory_mb = self._parse_memory(memory)
-
             disk_path = f"./vms/{vm_id}.qcow2"
 
             # Create VM disk
@@ -43,11 +56,13 @@ class VMController:  # Don't change class name and method names.
                 check=True
             )
 
-            # Random SSH port
-            ssh_port = 10000 + int(uuid.uuid4().int % 5000)
+            # Find free SSH port
+            ssh_port = self._find_port()
+            if ssh_port is None:
+                return {'success': False, 'error': 'No free ports available'}
 
             # Start VM
-            subprocess.Popen([
+            proc = subprocess.Popen([
                 "qemu-system-x86_64",
                 "-m", str(memory_mb),
                 "-smp", str(cpu),
@@ -58,7 +73,6 @@ class VMController:  # Don't change class name and method names.
                 "-display", "none"
             ])
 
-            # Save config locally
             self.vms[vm_id] = {
                 "name": name,
                 "os_type": os_type,
@@ -66,14 +80,19 @@ class VMController:  # Don't change class name and method names.
                 "memory_mb": memory_mb,
                 "disk_path": disk_path,
                 "ssh_port": ssh_port,
-                "status": "running"
+                "pid": proc.pid,
+                "status": "running",
+                "user": user
             }
+
+            print(f"[VM] Created {vm_id} on port {ssh_port}")
 
             return {
                 'success': True,
                 'id': vm_id,
                 'name': name,
-                'created_at': created_at
+                'created_at': created_at,
+                'ssh_port': ssh_port 
             }
 
         except Exception as e:
@@ -83,28 +102,39 @@ class VMController:  # Don't change class name and method names.
             }
 
     def stop(self, vm_id):
-        """
-        Stop a virtual machine
-        """
-
         try:
-
             if vm_id not in self.vms:
                 return {'success': False, 'error': 'VM not found'}
 
-            disk_path = self.vms[vm_id]["disk_path"]
+            vm = self.vms[vm_id]
 
+            if vm["status"] == "stopped":
+                return {'success': True}
+
+            pid = vm.get("pid")
+            if pid:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                    print(f"[VM] Stopped {vm_id} by PID {pid}")
+                except ProcessLookupError:
+                    pass
+
+            disk_path = vm["disk_path"]
             result = subprocess.run(
                 ["pgrep", "-f", disk_path],
                 capture_output=True,
                 text=True
             )
-
+            
             if result.stdout:
-                pid = result.stdout.strip().split("\n")[0]
-                os.kill(int(pid), signal.SIGTERM)
+                for pid_line in result.stdout.strip().split('\n'):
+                    try:
+                        os.kill(int(pid_line), signal.SIGTERM)
+                    except:
+                        pass
 
-            self.vms[vm_id]["status"] = "stopped"
+            vm["status"] = "stopped"
+            vm["pid"] = None
 
             return {'success': True}
 
@@ -112,12 +142,7 @@ class VMController:  # Don't change class name and method names.
             return {'success': False, 'error': str(e)}
 
     def start(self, vm_id):
-        """
-        Start a virtual machine
-        """
-
         try:
-
             if vm_id not in self.vms:
                 return {'success': False, 'error': 'VM not found'}
 
@@ -126,7 +151,8 @@ class VMController:  # Don't change class name and method names.
             if vm["status"] == "running":
                 return {'success': False, 'error': 'VM already running'}
 
-            subprocess.Popen([
+            # Start VM with saved parameters
+            proc = subprocess.Popen([
                 "qemu-system-x86_64",
                 "-m", str(vm["memory_mb"]),
                 "-smp", str(vm["cpu"]),
@@ -137,7 +163,10 @@ class VMController:  # Don't change class name and method names.
                 "-display", "none"
             ])
 
+            vm["pid"] = proc.pid
             vm["status"] = "running"
+
+            print(f"[VM] Started {vm_id} on port {vm['ssh_port']}")
 
             return {'success': True}
 
@@ -145,28 +174,33 @@ class VMController:  # Don't change class name and method names.
             return {'success': False, 'error': str(e)}
 
     def get_status(self, vm_id):
-        """
-        Check if VM is running
-        """
-
         try:
-
             if vm_id not in self.vms:
                 return False
 
-            disk_path = self.vms[vm_id]["disk_path"]
+            vm = self.vms[vm_id]
+            pid = vm.get("pid")
 
-            result = subprocess.run(
-                ["pgrep", "-f", disk_path],
-                capture_output=True,
-                text=True
-            )
+            if not pid:
+                # Try to find by disk path
+                result = subprocess.run(
+                    ["pgrep", "-f", vm["disk_path"]],
+                    capture_output=True,
+                    text=True
+                )
+                is_running = bool(result.stdout.strip())
+                vm["status"] = "running" if is_running else "stopped"
+                return is_running
 
-            running = bool(result.stdout.strip())
-
-            self.vms[vm_id]["status"] = "running" if running else "stopped"
-
-            return running
+            # Check if process exists
+            try:
+                os.kill(pid, 0)
+                vm["status"] = "running"
+                return True
+            except OSError:
+                vm["status"] = "stopped"
+                vm["pid"] = None
+                return False
 
         except Exception:
             return False
