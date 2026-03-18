@@ -58,7 +58,7 @@ def create_instance():
         )
 
     if result['success']:
-        # save to json
+        # save to JSON
         db = load_data()
         instance = {
             'id': result['id'],
@@ -163,22 +163,22 @@ def start_instance(instance_id):
         return jsonify({'success': False, 'error': result['error']})
 
 
-"""Place for monitor
 @app.route('/api/monitor', methods=['GET'])
 def monitor_data():
     #for monitor
     db = load_data()
 
     total = len(db['instances'])
-    running = sum(1 for i in db['instances'] if i['status'] == 'running')
-
+    running = 0
+    for i in db['instances']:
+        if i['status'] == 'running':
+            running += 1
 
     return jsonify({
         'total': total,
         'running': running,
         'stopped': total - running,
-        'recent_stops': [] 
-    })"""
+    })
 
 
 if __name__ == '__main__':

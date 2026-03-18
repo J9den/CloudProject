@@ -1,1 +1,17 @@
-"instances": []
+{
+  "instances": [
+    {
+      "id": "vm-0f594ed3",
+      "name": "1",
+      "type": "vm",
+      "os": "Ubuntu",
+      "cpu": 2,
+      "memory": "1GB",
+      "status": "running",
+      "user": "demo",
+      "created_at": 1773873129.7350209,
+      "start_time": 1773873140.960951,
+      "ssh_port": 10003
+    }
+  ]
+}

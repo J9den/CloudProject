@@ -45,6 +45,13 @@ def start_instance(instance_id):
     except:
         return {"success": False}
 
+def get_monitor_data():
+    """get monitor data"""
+    try:
+        resp = requests.get(f"{API_URL}/monitor")
+        return resp.json()
+    except:
+        return {"total": 0, "running": 0, "stopped": 0, "recent_stops": []}
 
 def main():
     st.set_page_config(layout="wide")
@@ -90,31 +97,36 @@ def main():
         total, running, stopped = get_instances_count(st.session_state.user)
 
         col1, col2, col3 = st.columns(3)
-        col1.metric("Total", total)
-        col2.metric("Running", running)
-        col3.metric("Stopped", stopped)
+        col1.metric("Your Total", total)
+        col2.metric("Your Running", running)
+        col3.metric("Your Stopped", stopped)
+
+        # Add monitor
+        st.markdown("---")
+        st.subheader("System Monitoring Status")
+
+        monitor = get_monitor_data()
+
+        col1, col2, col3, = st.columns(3)
+        col1.metric("Total", monitor['total'])
+        col2.metric("Running", monitor['running'])
+        col3.metric("Stopped", monitor['stopped'])
 
     elif menu == "Create":
         st.title("Create Instance")
+        type_choice = st.radio("Type", ["VM", "Container"], horizontal=True)
         with st.form("create_form"):
-            col1, col2 = st.columns(2)
-            with col1:
-                type_choice = st.radio("Type", ["VM", "Container"], horizontal=True)
-            with col2:
-                name = st.text_input("Name")
-
+            name = st.text_input("Name")
             if type_choice == "VM":
                 os_list = ["Ubuntu", "Fedora"]
             else:
                 os_list = ["ubuntu:22.04", "python:3.9", "nginx"]
             os_choice = st.selectbox("OS", os_list)
-
             col1, col2 = st.columns(2)
             with col1:
                 cpu = st.slider("CPU", 1, 4, 2)
             with col2:
-                memory = st.selectbox("memory", ["1GB", "2GB", "4GB"])
-
+                memory = st.selectbox("Memory", ["1GB", "2GB", "4GB"])
             if st.form_submit_button("Create"):
                 if not name:
                     st.error("Please enter a name")
@@ -150,7 +162,7 @@ def main():
             st.write(f"Total: {len(instances)} , Running: {running} ")
             st.write("---")
 
-            for i, inst in enumerate(instances): #Get index and content at the same time
+            for i, inst in enumerate(instances):
                 inst_id = inst.get('id', '')
                 inst_name = inst.get('name', '')
                 inst_type = inst.get('type', '')
@@ -158,8 +170,10 @@ def main():
                 inst_cpu = inst.get('cpu', '')
                 inst_mem = inst.get('memory', '')
                 inst_status = inst.get('status', '')
+                inst_port = inst.get('ssh_port', 'N/A')  # Add ssh_port
 
-                st.write(f"{i + 1}. {inst_name} | {inst_type} | {inst_os} | {inst_cpu}cores | {inst_mem} | {inst_status}")
+                st.write(
+                    f"{i + 1}. {inst_name} | {inst_type} | {inst_os} | {inst_cpu}cores | {inst_mem} | {inst_status} | SSH Port: {inst_port}")
 
                 col1, col2 = st.columns([1, 10])
                 with col1:
