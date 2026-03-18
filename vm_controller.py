@@ -32,6 +32,7 @@ class VMController:
                 return port
         return None
 
+
     def create(self, name, os_type, cpu, memory, user):
         try:
             # Basic validation
