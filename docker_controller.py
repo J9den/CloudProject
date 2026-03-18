@@ -68,7 +68,7 @@ class DockerController: # don't Change class name and method names
         try: #downloading img
             self.client.images.pull(image)
         except Exception as e:
-            return {"success": False, "error": str(error)}
+            return {"success": False, "error": str(e)}
 
         if not isinstance(memory, str):
             return {"success": False, "error": "Memory accepts string format!"}
@@ -108,8 +108,7 @@ class DockerController: # don't Change class name and method names
             }
         except Exception as e:
             return {
-                "success": False,"error": f"Error: {str(error)}"}
-
+                "success": False,"error": f"Error: {str(e)}"}
     def stop(self, container_id):
 
         if not self.client:
@@ -172,5 +171,5 @@ class DockerController: # don't Change class name and method names
         except docker.errors.NotFound:
             return "unknown"
         except Exception as e:
-            print(f"Unexpected error in get_status: {error}")
+            print(f"Unexpected error in get_status: {e}")
             return "unknown"
